@@ -23,3 +23,4 @@ export 'src/model.dart';
 export 'src/extended_properties.dart';
 export 'src/unit.dart';
 export 'src/mapped_enum_property.dart';
+export 'src/reflected_enum_property.dart';

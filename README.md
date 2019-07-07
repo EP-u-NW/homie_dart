@@ -3,6 +3,12 @@
 An impelementation of the [homie convention 3.0.1](https://homieiot.github.io/specification/spec-core-v3_0_1/) for dart.
 This libary can be used to create devices in the homie format.
 
+## Reflection
+
+This branch uses the dart:mirrors api to add a reflected version of the enum property.
+For more information on what that means, take a look at the ReflectedEnumProperty class.
+Since dart:mirrors is not supported by every dart impelementation (vm, web or flutter), this version is not intended for pub.
+
 ## BrokerConnection and MQTT connection
 
 This package does not contain any MQTT logic!
