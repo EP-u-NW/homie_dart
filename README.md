@@ -22,4 +22,4 @@ You can either implement it yourselfe or use the package [homie_dart_on_mqtt_cli
 
 ## Example
 
-An example, how to create a device can be found [here](https://github.com/EPNW/unity_ads_flutter/blob/master/example/supercar.dart), and [this file](https://github.com/EPNW/unity_ads_flutter/blob/master/example/example.dart) shows, how to run it.
+An example, how to create a device can be found [here](https://github.com/EPNW/homie_dart/blob/master/example/supercar.dart), and [this file](https://github.com/EPNW/homie_dart/blob/master/example/example.dart) shows, how to run it.
