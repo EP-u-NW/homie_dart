@@ -23,4 +23,10 @@ Future<Null> test(BrokerConnection con) async{
   print('Updating engine temperature...');
   superCar.engineTemperature=32.5;
   print('Engine temperature: ${superCar.engineTemperature}');
+
+  await new Future.delayed(const Duration(seconds: 10));
+  
+  print('Disconnecting...');
+  await superCar.disconnect();
+  print('Disconnected');
 }

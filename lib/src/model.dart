@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:meta/meta.dart';
 
@@ -8,6 +9,8 @@ import 'constants.dart';
 import 'utils.dart';
 import 'unit.dart';
 import 'homie_datatype.dart';
+
+Uint8List _emptyPayload = new Uint8List(0);
 
 ///Subclass this class to create a new homie device.
 abstract class Device {
@@ -140,7 +143,7 @@ abstract class Device {
   ///The [broker] musst be unique and might not be used in the [init] call of an other device.
   ///Create a new [BrokerConnection] for each device!
   Future<Null> init(BrokerConnection broker) async {
-    assert(deviceState == null);
+    assert(deviceState == null, 'State must be null to init a device!');
     String myTopic = '$root/$deviceId';
     _broker = broker;
     await _broker.connect('$myTopic/\$state', utf8.encode('lost'), true, qos);
@@ -168,6 +171,34 @@ abstract class Device {
     await ready();
   }
 
+  Future<Null> _forgetDevice() async {
+    String myTopic = '$root/$deviceId';
+    await _broker.publish('$myTopic/\$homie', _emptyPayload, true, qos);
+    await _broker.publish('$myTopic/\$name', _emptyPayload, true, qos);
+    await _broker.publish('$myTopic/\$localip', _emptyPayload, true, qos);
+    await _broker.publish('$myTopic/\$mac', _emptyPayload, true, qos);
+    await _broker.publish('$myTopic/\$fw/name', _emptyPayload, true, qos);
+    await _broker.publish('$myTopic/\$fw/version', _emptyPayload, true, qos);
+    await _broker.publish('$myTopic/\$implementation', _emptyPayload, true, qos);
+    await _broker.publish(
+        '$myTopic/\$stats/intervall', _emptyPayload, true, qos);
+    await _broker.publish('$myTopic/\$nodes', _emptyPayload, true, qos);
+    for (Node n in nodes) {
+      await _forgetNode(n);
+    }
+    await _forgetStats();
+  }
+
+  Future<Null> _forgetNode(Node n) async {
+    String nodeTopic = '$root/$deviceId/${n.nodeId}';
+    await _broker.publish('$nodeTopic/\$name', _emptyPayload, true, qos);
+    await _broker.publish('$nodeTopic/\$type', _emptyPayload, true, qos);
+    await _broker.publish('$nodeTopic/\$properties', _emptyPayload, true, qos);
+    for (Property p in n.properties) {
+      await _forgetProperty(nodeTopic, p);
+    }
+  }
+
   Future<Null> _sendNode(Node n) async {
     String nodeTopic = '$root/$deviceId/${n.nodeId}';
     await _broker.publish('$nodeTopic/\$name', utf8.encode(n.name), true, qos);
@@ -178,6 +209,22 @@ abstract class Device {
         '$nodeTopic/\$properties', utf8.encode(propertyIds), true, qos);
     for (Property p in n.properties) {
       await _sendProperty(nodeTopic, p);
+    }
+  }
+
+  Future<Null> _forgetProperty(String nodeTopic, Property p) async {
+    String propertyTopic = '$nodeTopic/${p.propertyId}';
+    await _broker.publish('$propertyTopic/\$name', _emptyPayload, true, qos);
+    await _broker.publish('$propertyTopic/\$settable', _emptyPayload, true, qos);
+    await _broker.publish('$propertyTopic/\$retained', _emptyPayload, true, qos);
+    await _broker.publish('$propertyTopic/\$unit', _emptyPayload, true, qos);
+    await _broker.publish('$propertyTopic/\$datatype', _emptyPayload, true, qos);
+    if (p.format != null) {
+      await _broker.publish('$propertyTopic/\$format', _emptyPayload, true, qos);
+    }
+    bool retained = p is RetainedMixin;
+    if (retained) {
+      await _broker.publish(propertyTopic, _emptyPayload, true, qos);
     }
   }
 
@@ -208,20 +255,27 @@ abstract class Device {
     assert(
         !p.isBound(), 'The property $p is already bound to an other device!');
     bool retained = p is RetainedMixin;
-    p._publisher =
-        (String value) => _publish(propertyTopic, retained, value, true);
+    p._publisher = (String value) => _publish(propertyTopic, retained, value);
     if (retained) {
       String value = p.valueToStringRepresentation((p as RetainedMixin)._value);
-      _publish(propertyTopic, true, value, false);
+      await _broker.publish(propertyTopic, utf8.encode(value), true, qos);
     }
   }
 
-  Future<Null> _publish(
-      String topic, bool retained, String value, bool assertReady) async {
-    if (assertReady) {
-      assert(deviceState == DeviceState.ready);
-    }
+  Future<Null> _publish(String topic, bool retained, String value) async {
+    assert(deviceState == DeviceState.ready);
     return _broker.publish(topic, utf8.encode(value), retained, qos);
+  }
+
+  Future<Null> _forgetStats() async {
+    String statsTopic = '$root/$deviceId/\$stats';
+    await _broker.publish('$statsTopic/uptime', _emptyPayload, true, qos);
+    await _broker.publish('$statsTopic/signal', _emptyPayload, true, qos);
+    await _broker.publish('$statsTopic/cputemp', _emptyPayload, true, qos);
+    await _broker.publish('$statsTopic/cpuload', _emptyPayload, true, qos);
+    await _broker.publish('$statsTopic/battery', _emptyPayload, true, qos);
+    await _broker.publish('$statsTopic/freeheap', _emptyPayload, true, qos);
+    await _broker.publish('$statsTopic/supply', _emptyPayload, true, qos);
   }
 
   Future<Null> _sendStats() async {
@@ -299,6 +353,7 @@ abstract class Device {
     _statSender.cancel();
     await _broker.publish(
         '$root/$deviceId/\$state', utf8.encode('disconnected'), true, qos);
+    await _forgetDevice();
     await _broker.disconnect();
     _deviceState = DeviceState.disconnected;
   }
@@ -514,18 +569,18 @@ abstract class Property<T, V extends Property<T, V>> {
   ///Converts [s], as recieved from the message broker, to an value object.
   T stringRepresentationToValue(String s);
 
-///Creates a new property with this unique, valie [propertyId]. See [isValidId].
-///
-///The homie [dataType] must not be [null].
-///
-///The optional [name] should be human readable.
-///
-///If this is a [settable] property, an [EventListener] may be registered for it,
-///and the property is able to receive commands. If not given, settable defaults to [false].
-///
-///Depending on the [dataType], [format] may be optional.
-///
-///If unit is [null], [Unit.none] will be used.
+  ///Creates a new property with this unique, valie [propertyId]. See [isValidId].
+  ///
+  ///The homie [dataType] must not be [null].
+  ///
+  ///The optional [name] should be human readable.
+  ///
+  ///If this is a [settable] property, an [EventListener] may be registered for it,
+  ///and the property is able to receive commands. If not given, settable defaults to [false].
+  ///
+  ///Depending on the [dataType], [format] may be optional.
+  ///
+  ///If unit is [null], [Unit.none] will be used.
   Property(
       {@required String propertyId,
       String name,

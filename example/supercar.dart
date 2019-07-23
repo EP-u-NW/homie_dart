@@ -20,7 +20,7 @@ class SuperCar extends Device {
   SuperCar({@required String deviceId})
       : super(
             name: 'Super Car',
-            implementation: 'dartSuperCar',
+            implementation: 'superCarDart',
             statsIntervall: 60,
             deviceId: deviceId,
             nodes: <Node>[

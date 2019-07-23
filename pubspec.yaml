@@ -3,7 +3,7 @@ description: An implementation of the homie convention in dart.
 author: EPNW <prokopwieler.hardundsoftware@gmail.com>
 homepage: https://github.com/epnw/homie_dart
 
-version: 1.0.0
+version: 1.1.0
 
 environment:
   sdk: ">=2.1.0 <3.0.0"
