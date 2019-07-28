@@ -1,3 +1,13 @@
+import 'dart:typed_data';
+import 'constants.dart';
+import 'dart:convert';
+
+Uint8List _emptyPayload = new Uint8List(0);
+
+Uint8List payload(String s){
+  return s==emptyPayload?_emptyPayload:utf8.encode(s);
+}
+
 bool inOrder(List<num> values) {
   if (values.length < 2) {
     return true;
@@ -27,11 +37,11 @@ bool isValidId(String id) {
 }
 
 bool validString(String string) {
-  return string != null && string.length > 0;
+  return string != null && string.isNotEmpty;
 }
 
 bool enumValuesValid(Iterable<String> values) {
-  if (values != null && values.length > 0) {
+  if (values != null && values.isNotEmpty) {
     return values.firstWhere((String value) => !validString(value)) == null;
   } else {
     return false;

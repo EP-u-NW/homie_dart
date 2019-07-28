@@ -16,7 +16,7 @@ library homie_dart;
 export 'src/broker_connection.dart';
 export 'src/colors.dart';
 export 'src/utils.dart'
-    hide inOrder, validString, asEnumString, enumValuesValid;
+    hide inOrder, validString, asEnumString, enumValuesValid, payload;
 export 'src/constants.dart';
 export 'src/homie_datatype.dart' hide typeName;
 export 'src/model.dart';

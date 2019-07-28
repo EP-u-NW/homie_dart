@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:meta/meta.dart';
 
@@ -10,14 +9,21 @@ import 'utils.dart';
 import 'unit.dart';
 import 'homie_datatype.dart';
 
-Uint8List _emptyPayload = new Uint8List(0);
+///Baseclass for [Device], [Node] and [Property]
+abstract class HomieTopic {
+  Future<Null> _publish(String topic, String content,
+      [bool retained = true, int qos]);
+}
 
 ///Subclass this class to create a new homie device.
-abstract class Device {
+abstract class Device extends HomieTopic {
   BrokerConnection _broker;
   Timer _statSender;
   DeviceState _deviceState;
   final DeviceStats _deviceStats;
+
+  ///The full qualified topic Id of this device including the [root].
+  String get fullId => '${root ?? ''}$deviceId';
 
   ///The root of this devices topics. The homie convention proposes 'homie', which is the default value.
   final String root;
@@ -127,7 +133,12 @@ abstract class Device {
         this.implementation = implementation,
         this.statsIntervall = statsIntervall,
         this._deviceStats = stats ?? new DeviceStats.sinceNow(),
-        this.nodes = new List<Node>.unmodifiable(nodes);
+        this.nodes = new List<Node>.unmodifiable(nodes) {
+    for (Node n in nodes) {
+      assert(n._device == null, 'This node is already part of another device!');
+      n._device = this;
+    }
+  }
 
   ///returns the [Node] with this nodeId, or [null] if no node with this nodeId is part of this device.
   Node getNode(String nodeId) {
@@ -144,167 +155,86 @@ abstract class Device {
   ///Create a new [BrokerConnection] for each device!
   Future<Null> init(BrokerConnection broker) async {
     assert(deviceState == null, 'State must be null to init a device!');
-    String myTopic = '$root/$deviceId';
     _broker = broker;
-    await _broker.connect('$myTopic/\$state', utf8.encode('lost'), true, qos);
+    await _broker.connect('$fullId/\$state', payload('lost'), true, qos);
     _deviceState = DeviceState.init;
-    await _broker.publish('$myTopic/\$state', utf8.encode('init'), true, qos);
-    await _broker.publish(
-        '$myTopic/\$homie', utf8.encode(conventionVersion), true, qos);
-    await _broker.publish('$myTopic/\$name', utf8.encode(name), true, qos);
-    await _broker.publish(
-        '$myTopic/\$localip', utf8.encode(localIp), true, qos);
-    await _broker.publish('$myTopic/\$mac', utf8.encode(mac), true, qos);
-    await _broker.publish(
-        '$myTopic/\$fw/name', utf8.encode(firmwareName), true, qos);
-    await _broker.publish(
-        '$myTopic/\$fw/version', utf8.encode(firmwareVersion), true, qos);
-    await _broker.publish(
-        '$myTopic/\$implementation', utf8.encode(implementation), true, qos);
-    await _broker.publish('$myTopic/\$stats/intervall',
-        utf8.encode(statsIntervall.toString()), true, qos);
+    await _publish('$fullId/\$state', 'init');
+
+    await _publish('$fullId/\$homie', conventionVersion);
+    await _publish('$fullId/\$name', name);
+    await _publish('$fullId/\$implementation', implementation);
     String nodesIds = nodes.map((Node n) => n.nodeId).join(',');
-    await _broker.publish('$myTopic/\$nodes', utf8.encode(nodesIds), true, qos);
+    await _publish('$fullId/\$nodes', nodesIds);
     for (Node n in nodes) {
-      await _sendNode(n);
+      await n._sendNode();
     }
+
+    //TODO Remove firmware stuff
+    await _publish('$fullId/\$localip', localIp);
+    await _publish('$fullId/\$mac', mac);
+    await _publish('$fullId/\$fw/name', firmwareName);
+    await _publish('$fullId/\$fw/version', firmwareVersion);
+
+    //TODO Remove stats stuff
+    await _publish('$fullId/\$stats/intervall', toString());
+
     await ready();
   }
 
   Future<Null> _forgetDevice() async {
-    String myTopic = '$root/$deviceId';
-    await _broker.publish('$myTopic/\$homie', _emptyPayload, true, qos);
-    await _broker.publish('$myTopic/\$name', _emptyPayload, true, qos);
-    await _broker.publish('$myTopic/\$localip', _emptyPayload, true, qos);
-    await _broker.publish('$myTopic/\$mac', _emptyPayload, true, qos);
-    await _broker.publish('$myTopic/\$fw/name', _emptyPayload, true, qos);
-    await _broker.publish('$myTopic/\$fw/version', _emptyPayload, true, qos);
-    await _broker.publish('$myTopic/\$implementation', _emptyPayload, true, qos);
-    await _broker.publish(
-        '$myTopic/\$stats/intervall', _emptyPayload, true, qos);
-    await _broker.publish('$myTopic/\$nodes', _emptyPayload, true, qos);
+    await _publish('$fullId/\$homie', emptyPayload);
+    await _publish('$fullId/\$name', emptyPayload);
+    await _publish('$fullId/\$localip', emptyPayload);
+    await _publish('$fullId/\$mac', emptyPayload);
+    await _publish('$fullId/\$fw/name', emptyPayload);
+    await _publish('$fullId/\$fw/version', emptyPayload);
+    await _publish('$fullId/\$implementation', emptyPayload);
+    await _publish('$fullId/\$stats/intervall', emptyPayload);
+    await _publish('$fullId/\$nodes', emptyPayload);
     for (Node n in nodes) {
-      await _forgetNode(n);
+      await n._forgetNode();
     }
+    //TODO Remove stats stuff
     await _forgetStats();
   }
 
-  Future<Null> _forgetNode(Node n) async {
-    String nodeTopic = '$root/$deviceId/${n.nodeId}';
-    await _broker.publish('$nodeTopic/\$name', _emptyPayload, true, qos);
-    await _broker.publish('$nodeTopic/\$type', _emptyPayload, true, qos);
-    await _broker.publish('$nodeTopic/\$properties', _emptyPayload, true, qos);
-    for (Property p in n.properties) {
-      await _forgetProperty(nodeTopic, p);
-    }
-  }
-
-  Future<Null> _sendNode(Node n) async {
-    String nodeTopic = '$root/$deviceId/${n.nodeId}';
-    await _broker.publish('$nodeTopic/\$name', utf8.encode(n.name), true, qos);
-    await _broker.publish('$nodeTopic/\$type', utf8.encode(n.type), true, qos);
-    String propertyIds =
-        n.properties.map((Property p) => p.propertyId).join(',');
-    await _broker.publish(
-        '$nodeTopic/\$properties', utf8.encode(propertyIds), true, qos);
-    for (Property p in n.properties) {
-      await _sendProperty(nodeTopic, p);
-    }
-  }
-
-  Future<Null> _forgetProperty(String nodeTopic, Property p) async {
-    String propertyTopic = '$nodeTopic/${p.propertyId}';
-    await _broker.publish('$propertyTopic/\$name', _emptyPayload, true, qos);
-    await _broker.publish('$propertyTopic/\$settable', _emptyPayload, true, qos);
-    await _broker.publish('$propertyTopic/\$retained', _emptyPayload, true, qos);
-    await _broker.publish('$propertyTopic/\$unit', _emptyPayload, true, qos);
-    await _broker.publish('$propertyTopic/\$datatype', _emptyPayload, true, qos);
-    if (p.format != null) {
-      await _broker.publish('$propertyTopic/\$format', _emptyPayload, true, qos);
-    }
-    bool retained = p is RetainedMixin;
-    if (retained) {
-      await _broker.publish(propertyTopic, _emptyPayload, true, qos);
-    }
-  }
-
-  Future<Null> _sendProperty(String nodeTopic, Property p) async {
-    String propertyTopic = '$nodeTopic/${p.propertyId}';
-    await _broker.publish(
-        '$propertyTopic/\$name', utf8.encode(p.name), true, qos);
-    await _broker.publish('$propertyTopic/\$settable',
-        utf8.encode(p.settable.toString()), true, qos);
-    await _broker.publish('$propertyTopic/\$retained',
-        utf8.encode(p.retained.toString()), true, qos);
-    await _broker.publish(
-        '$propertyTopic/\$unit', utf8.encode(p.unit.toString()), true, qos);
-    await _broker.publish('$propertyTopic/\$datatype',
-        utf8.encode(typeName[p.dataType]), true, qos);
-    if (p.format != null) {
-      await _broker.publish(
-          '$propertyTopic/\$format', utf8.encode(p.format), true, qos);
-    }
-    if (p.settable) {
-      Stream<List<int>> events =
-          await _broker.subscribe('$propertyTopic/set', qos);
-      new Utf8Decoder()
-          .bind(events)
-          .map((String value) => p.stringRepresentationToValue(value))
-          .forEach(p._informListener);
-    }
-    assert(
-        !p.isBound(), 'The property $p is already bound to an other device!');
-    bool retained = p is RetainedMixin;
-    p._publisher = (String value) => _publish(propertyTopic, retained, value);
-    if (retained) {
-      String value = p.valueToStringRepresentation((p as RetainedMixin)._value);
-      await _broker.publish(propertyTopic, utf8.encode(value), true, qos);
-    }
-  }
-
-  Future<Null> _publish(String topic, bool retained, String value) async {
-    assert(deviceState == DeviceState.ready);
-    return _broker.publish(topic, utf8.encode(value), retained, qos);
-  }
-
+  //TODO Remove stats stuff
   Future<Null> _forgetStats() async {
-    String statsTopic = '$root/$deviceId/\$stats';
-    await _broker.publish('$statsTopic/uptime', _emptyPayload, true, qos);
-    await _broker.publish('$statsTopic/signal', _emptyPayload, true, qos);
-    await _broker.publish('$statsTopic/cputemp', _emptyPayload, true, qos);
-    await _broker.publish('$statsTopic/cpuload', _emptyPayload, true, qos);
-    await _broker.publish('$statsTopic/battery', _emptyPayload, true, qos);
-    await _broker.publish('$statsTopic/freeheap', _emptyPayload, true, qos);
-    await _broker.publish('$statsTopic/supply', _emptyPayload, true, qos);
+    String statsTopic = '$fullId/\$stats';
+    await _publish('$statsTopic/uptime', emptyPayload);
+    await _publish('$statsTopic/signal', emptyPayload);
+    await _publish('$statsTopic/cputemp', emptyPayload);
+    await _publish('$statsTopic/cpuload', emptyPayload);
+    await _publish('$statsTopic/battery', emptyPayload);
+    await _publish('$statsTopic/freeheap', emptyPayload);
+    await _publish('$statsTopic/supply', emptyPayload);
   }
 
+  //TODO Remove stats stuff
   Future<Null> _sendStats() async {
-    String statsTopic = '$root/$deviceId/\$stats';
-    await _broker.publish('$statsTopic/uptime',
-        utf8.encode(deviceStats.uptime.toString()), true, qos);
+    await _publish('$fullId/\$stats/uptime', deviceStats.uptime.toString());
     if (deviceStats.signalStrength != null) {
-      await _broker.publish('$statsTopic/signal',
-          utf8.encode(deviceStats.signalStrength.toString()), true, qos);
+      await _publish(
+          '$fullId/\$stats/signal', deviceStats.signalStrength.toString());
     }
     if (deviceStats.cpuTemperature != null) {
-      await _broker.publish('$statsTopic/cputemp',
-          utf8.encode(deviceStats.cpuTemperature.toString()), true, qos);
+      await _publish(
+          '$fullId/\$stats/cputemp', deviceStats.cpuTemperature.toString());
     }
     if (deviceStats.cpuLoad != null) {
-      await _broker.publish('$statsTopic/cpuload',
-          utf8.encode(deviceStats.cpuLoad.toString()), true, qos);
+      await _publish('$fullId/\$stats/cpuload', deviceStats.cpuLoad.toString());
     }
     if (deviceStats.batterLevel != null) {
-      await _broker.publish('$statsTopic/battery',
-          utf8.encode(deviceStats.batterLevel.toString()), true, qos);
+      await _publish(
+          '$fullId/\$stats/battery', deviceStats.batterLevel.toString());
     }
     if (deviceStats.freeHeap != null) {
-      await _broker.publish('$statsTopic/freeheap',
-          utf8.encode(deviceStats.freeHeap.toString()), true, qos);
+      await _publish(
+          '$fullId/\$stats/freeheap', deviceStats.freeHeap.toString());
     }
     if (deviceStats.powerSupply != null) {
-      await _broker.publish('$statsTopic/supply',
-          utf8.encode(deviceStats.powerSupply.toString()), true, qos);
+      await _publish(
+          '$fullId/\$stats/supply', deviceStats.powerSupply.toString());
     }
   }
 
@@ -316,8 +246,10 @@ abstract class Device {
         deviceState == DeviceState.init ||
         deviceState == DeviceState.sleeping);
     await _sendStats();
-    await _broker.publish(
-        '$root/$deviceId/\$state', utf8.encode('ready'), true, qos);
+    await _publish('$fullId/\$state', 'ready');
+    _deviceState = DeviceState.ready;
+
+//TODO Remove stats stuff
     _statSender =
         new Timer.periodic(new Duration(seconds: statsIntervall), (Timer t) {
       if (t.isActive) {
@@ -326,14 +258,12 @@ abstract class Device {
         } on DisconnectingException {}
       }
     });
-    _deviceState = DeviceState.ready;
   }
 
   ///Puts the device into sleep state. While sleeping, sending status is paused.
   Future<Null> sleep() async {
     _statSender.cancel();
-    await _broker.publish(
-        '$root/$deviceId/\$state', utf8.encode('sleeping'), true, qos);
+    await _publish('$fullId/\$state', 'sleeping');
     _deviceState = DeviceState.sleeping;
   }
 
@@ -341,8 +271,7 @@ abstract class Device {
   ///Entering this state will suspend the status updates.
   Future<Null> alert() async {
     _statSender.cancel();
-    await _broker.publish(
-        '$root/$deviceId/\$state', utf8.encode('alert'), true, qos);
+    await _publish('$fullId/\$state', 'alert');
     _deviceState = DeviceState.alert;
   }
 
@@ -351,11 +280,15 @@ abstract class Device {
   ///See the remarks in [init].
   Future<Null> disconnect() async {
     _statSender.cancel();
-    await _broker.publish(
-        '$root/$deviceId/\$state', utf8.encode('disconnected'), true, qos);
+    await _publish('$fullId/\$state', 'disconnected');
     await _forgetDevice();
     await _broker.disconnect();
     _deviceState = DeviceState.disconnected;
+  }
+
+  Future<Null> _publish(String topic, String content,
+      [bool retained = true, int _qos]) {
+    return _broker.publish(topic, payload(content), retained, _qos ?? qos);
   }
 }
 
@@ -442,9 +375,19 @@ enum DeviceState { init, ready, disconnected, sleeping, lost, alert }
 
 ///This class represents a homie node. Nodes are added to devices.
 ///Each node object must only be part of one device!
-class Node {
+class Node extends HomieTopic {
+  //The device this node belongs to.
+  Device _device;
+  Device get device => _device;
+
   ///The unique Id of this node, which must be an valid homie Id. See [isValidId].
   final String nodeId;
+
+  ///The full qualified topic Id of this node. It is only valid to call this on a node which is part of a device!
+  String get fullId {
+    assert(_device != null, 'This node is not part of a device');
+    return '${_device.fullId}/$nodeId';
+  }
 
   ///The human readable name of this node.
   final String name;
@@ -466,11 +409,40 @@ class Node {
         this.nodeId = nodeId,
         this.name = name,
         this.type = type,
-        this.properties = new List<Property>.unmodifiable(properties);
+        this.properties = new List<Property>.unmodifiable(properties) {
+    for (Property p in properties) {
+      assert(p._node == null, 'This property is already part of another node');
+      p._node = this;
+    }
+  }
 
   ///returns the [Property] with this propertyId, or [null] if no property with this propertyId is part of this node.
   Property getProperty(String propertyId) {
     return properties.firstWhere((Property p) => p.propertyId == propertyId);
+  }
+
+  Future<Null> _forgetNode() async {
+    await _publish('$fullId/\$name', emptyPayload);
+    await _publish('$fullId/\$type', emptyPayload);
+    await _publish('$fullId/\$properties', emptyPayload);
+    for (Property p in properties) {
+      await p._forgetProperty();
+    }
+  }
+
+  Future<Null> _sendNode() async {
+    await _publish('$fullId/\$name', name);
+    await _publish('$fullId/\$type', type);
+    String propertyIds = properties.map((Property p) => p.propertyId).join(',');
+    await _publish('$fullId/\$properties', propertyIds);
+    for (Property p in properties) {
+      await p._sendProperty();
+    }
+  }
+
+  Future<Null> _publish(String topic, String content,
+      [bool retained = true, int qos]) {
+    return _device._publish(topic, content, retained, qos);
   }
 }
 
@@ -479,8 +451,6 @@ class Node {
 ///to let the homie controller know, that the set command was processed.
 typedef Future<Null> EventListener<T, V extends Property<T, V>>(
     V property, T command);
-
-typedef Future<Null> _Publisher(String value);
 
 ///Mixin this to make a [Property] retained.
 ///In the constructor of your property you have to call the [withInitialValue()] method with a initial value for the property.
@@ -504,9 +474,19 @@ mixin RetainedMixin<T, V extends Property<T, V>> on Property<T, V> {
 ///The typeargument [T] denotes the representation of the value of the property.
 ///For most datatypes, homie uses Strings, so the property class is responsible to translate its value to a String and vice versa.
 ///The typeargument [V] is needed so that an [EventListener] knows, of what type the property is.
-abstract class Property<T, V extends Property<T, V>> {
-  _Publisher _publisher;
+abstract class Property<T, V extends Property<T, V>> extends HomieTopic {
   EventListener<T, V> _listener;
+
+  Node _node;
+
+  ///The node this property belongs to.
+  Node get node => _node;
+
+  ///The full qualified topic Id of this property. It is only valid to call this on a property which is part of a node!
+  String get fullId {
+    assert(_node != null, 'This property is not part of a node');
+    return '${_node.fullId}/$propertyId';
+  }
 
   ///The dataType of this property according to the homie convention.
   final HomieDatatype dataType;
@@ -545,21 +525,17 @@ abstract class Property<T, V extends Property<T, V>> {
     }
   }
 
-  ///A property may only be part of one [Node], which itself may only be part of one [Device].
-  ///During the [Device.init] method of the device the property is bound to that device.
-  bool isBound() => _publisher != null;
-
   ///Publishes a new [value] for this property.
   ///If this property is [retained], the value of the [RetainedMixin] is also updated.
   ///
   ///Awaiting the returned future guarantees the publishing of the message to the broker with respect to the quality of service [qos].
   Future<Null> publishValue(T value) {
-    assert(isBound(),
+    assert(node?.device?.deviceState == DeviceState.ready,
         'This property cannot publish values since it is not part of of device which state is ready.');
     if (this is RetainedMixin<T, V>) {
       (this as RetainedMixin<T, V>)._value = value;
     }
-    return _publisher(valueToStringRepresentation(value));
+    return _publish(fullId, valueToStringRepresentation(value), retained);
   }
 
   ///Converts an value of type [T] to its String representation, which is then send to the message broker.
@@ -596,4 +572,48 @@ abstract class Property<T, V extends Property<T, V>> {
         this.unit = unit ?? Unit.none,
         this.dataType = dataType,
         this.format = format;
+
+  //FIXME Add property related code
+  Future<Null> _forgetProperty() async {
+    await _publish('$fullId/\$name', emptyPayload);
+    await _publish('$fullId/\$settable', emptyPayload);
+    await _publish('$fullId/\$retained', emptyPayload);
+    await _publish('$fullId/\$unit', emptyPayload);
+    await _publish('$fullId/\$datatype', emptyPayload);
+    if (format != null) {
+      await _publish('$fullId/\$format', emptyPayload);
+    }
+    if (retained) {
+      await _publish(fullId, emptyPayload);
+    }
+  }
+
+  Future<Null> _sendProperty() async {
+    await _publish('$fullId/\$name', name);
+    await _publish('$fullId/\$settable', settable.toString());
+    await _publish('$fullId/\$retained', retained.toString());
+    await _publish('$fullId/\$unit', unit.toString());
+    await _publish('$fullId/\$datatype', typeName[dataType]);
+    if (format != null) {
+      await _publish('$fullId/\$format', format);
+    }
+    if (settable) {
+      Stream<List<int>> events =
+          await _node._device._broker.subscribe('$fullId/set', qos);
+      new Utf8Decoder()
+          .bind(events)
+          .map((String value) => stringRepresentationToValue(value))
+          .forEach(_informListener);
+    }
+    if (retained) {
+      String value =
+          valueToStringRepresentation((this as RetainedMixin)._value);
+      await _publish(fullId, value);
+    }
+  }
+
+  Future<Null> _publish(String topic, String content,
+      [bool retained = true, int qos]) {
+    return _node._publish(topic, content, retained, qos);
+  }
 }
