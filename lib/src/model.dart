@@ -15,6 +15,33 @@ abstract class HomieTopic {
       [bool retained = true, int qos]);
 }
 
+abstract class Extension {
+  Future<Null> publish(HomieTopic base, String topic, String content,
+      [bool retained = true, int qos]) {
+    return base._publish(topic, content, retained, qos);
+  }
+}
+
+abstract class DeviceExtension extends Extension {
+    final String version;
+    final String extensionId;
+    final List<String> homieVersions;
+    String get extensionsEntry =>
+        '$extensionId:$version:[${homieVersions.join(';')}]';
+
+  void onStateChange(Device device, DeviceState state);
+}
+
+abstract class NodeExtension extends Extension {
+  void onPublishNode(Node n);
+  void onUnpublishNode(Node n);
+}
+
+abstract class PropertyExtension extends Extension {
+  void onPublishProperty(Property p);
+  void onUnpublishProperty(Property p);
+}
+
 ///Subclass this class to create a new homie device.
 abstract class Device extends HomieTopic {
   BrokerConnection _broker;
@@ -146,7 +173,6 @@ abstract class Device extends HomieTopic {
   }
 
   ///Inits the device, etablishes a connection to the mqtt broker and sets appropriate last will topics.
-  ///During the initalisation process each [Property] will be bound to the device.
   ///The initalisation ends with an automatic call to [ready].
   ///It is invalid to call this method if the [deviceState] has any value other than [null].
   ///This means, even a disconnected device can not be connected again by calling [init].
@@ -242,9 +268,11 @@ abstract class Device extends HomieTopic {
   ///Only call manually when [deviceState] is sleeping or alert, any other case will throw an assertion.
   ///While the device is ready, that stats will automatically be published according to [statsIntervall].
   Future<Null> ready() async {
-    assert(deviceState == DeviceState.alert ||
-        deviceState == DeviceState.init ||
-        deviceState == DeviceState.sleeping);
+    assert(
+        deviceState == DeviceState.alert ||
+            deviceState == DeviceState.init ||
+            deviceState == DeviceState.sleeping,
+        'Can only go into the ready state from the alert, init or sleeping state.');
     await _sendStats();
     await _publish('$fullId/\$state', 'ready');
     _deviceState = DeviceState.ready;
@@ -255,13 +283,21 @@ abstract class Device extends HomieTopic {
       if (t.isActive) {
         try {
           _sendStats();
-        } on DisconnectingException {}
+        } on DisconnectingError {}
       }
     });
   }
 
   ///Puts the device into sleep state. While sleeping, sending status is paused.
   Future<Null> sleep() async {
+     assert(
+        (const <DeviceState>[
+          DeviceState.alert,
+          DeviceState.ready,
+          DeviceState.sleeping
+        ])
+            .contains(deviceState),
+        'Can only go into the sleeping state from the alert, ready or sleeping state.');
     _statSender.cancel();
     await _publish('$fullId/\$state', 'sleeping');
     _deviceState = DeviceState.sleeping;
@@ -270,6 +306,14 @@ abstract class Device extends HomieTopic {
   ///You can put the device in alert state to denote an error which requires an user action.
   ///Entering this state will suspend the status updates.
   Future<Null> alert() async {
+    assert(
+        (const <DeviceState>[
+          DeviceState.alert,
+          DeviceState.ready,
+          DeviceState.sleeping
+        ])
+            .contains(deviceState),
+        'Can only go into the alert state from the alert, ready or sleeping state.');
     _statSender.cancel();
     await _publish('$fullId/\$state', 'alert');
     _deviceState = DeviceState.alert;
@@ -279,6 +323,14 @@ abstract class Device extends HomieTopic {
   ///You can never use this object instance again!
   ///See the remarks in [init].
   Future<Null> disconnect() async {
+        assert(
+        (const <DeviceState>[
+          DeviceState.alert,
+          DeviceState.ready,
+          DeviceState.sleeping
+        ])
+            .contains(deviceState),
+        'Can only go into the disconnected state from the alert, ready or sleeping state.');
     _statSender.cancel();
     await _publish('$fullId/\$state', 'disconnected');
     await _forgetDevice();
@@ -288,6 +340,15 @@ abstract class Device extends HomieTopic {
 
   Future<Null> _publish(String topic, String content,
       [bool retained = true, int _qos]) {
+    assert(
+        (const <DeviceState>[
+          DeviceState.alert,
+          DeviceState.init,
+          DeviceState.ready,
+          DeviceState.sleeping
+        ])
+            .contains(deviceState),
+        'This device can not publish values since it is not in a valid state for publishing! Allowed states are alert, init, ready or sleeping.');
     return _broker.publish(topic, payload(content), retained, _qos ?? qos);
   }
 }
@@ -442,6 +503,8 @@ class Node extends HomieTopic {
 
   Future<Null> _publish(String topic, String content,
       [bool retained = true, int qos]) {
+    assert(device != null,
+        'This node can not publish values as it is not part of a device!');
     return _device._publish(topic, content, retained, qos);
   }
 }
@@ -614,6 +677,8 @@ abstract class Property<T, V extends Property<T, V>> extends HomieTopic {
 
   Future<Null> _publish(String topic, String content,
       [bool retained = true, int qos]) {
+    assert(node != null,
+        'This property can not publish values as it is not part of a node');
     return _node._publish(topic, content, retained, qos);
   }
 }
