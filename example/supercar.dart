@@ -24,7 +24,7 @@ class SuperCar extends Device {
             implementation: 'superCarDart',
             extensions: useLegacyExtensions
                 ? <DeviceExtension>[
-                    new LegacyFirmware(
+                    const LegacyFirmware(
                         firmwareName: 'homie-dart',
                         firmwareVersion: '1.0.0',
                         localIp: '192.168.178.147',
