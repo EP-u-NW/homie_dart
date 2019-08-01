@@ -18,8 +18,13 @@ class StringProperty extends Property<String, StringProperty> {
   ///
   ///If unit is [null], [Unit.none] will be used.
   StringProperty(
-      {@required String propertyId, String name, Unit unit, bool settable})
+      {@required String propertyId,
+      Iterable<PropertyExtension> extensions,
+      String name,
+      Unit unit,
+      bool settable})
       : super(
+            extensions: extensions,
             propertyId: propertyId,
             name: name,
             unit: unit,
@@ -40,12 +45,14 @@ class StringPropertyRetained extends StringProperty
     with RetainedMixin<String, StringProperty> {
   StringPropertyRetained(
       {@required String propertyId,
+      Iterable<PropertyExtension> extensions,
       String name,
       Unit unit,
       bool settable,
       @required String initialValue})
       : assert(initialValue != null),
         super(
+            extensions: extensions,
             propertyId: propertyId,
             name: name,
             unit: unit,
@@ -62,8 +69,13 @@ class BooleanProperty extends Property<bool, BooleanProperty> {
   ///
   ///If this is a [settable] property, an [EventListener] may be registered for it,
   ///and the property is able to receive commands. If not given, settable defaults to [false].
-  BooleanProperty({@required String propertyId, String name, bool settable})
+  BooleanProperty(
+      {@required String propertyId,
+      Iterable<PropertyExtension> extensions,
+      String name,
+      bool settable})
       : super(
+            extensions: extensions,
             propertyId: propertyId,
             name: name,
             unit: null,
@@ -86,11 +98,16 @@ class BooleanPropertyRetained extends BooleanProperty
     with RetainedMixin<bool, BooleanProperty> {
   BooleanPropertyRetained(
       {@required String propertyId,
+      Iterable<PropertyExtension> extensions,
       String name,
       bool settable,
       @required bool initialValue})
       : assert(initialValue != null),
-        super(propertyId: propertyId, name: name, settable: settable) {
+        super(
+            extensions: extensions,
+            propertyId: propertyId,
+            name: name,
+            settable: settable) {
     withInitialValue(initialValue);
   }
 }
@@ -112,12 +129,14 @@ class IntegerProperty extends Property<int, IntegerProperty> {
   ///If unit is [null], [Unit.none] will be used.
   IntegerProperty(
       {@required String propertyId,
+      Iterable<PropertyExtension> extensions,
       String name,
       Unit unit,
       int minValue,
       int maxValue,
       bool settable})
       : super(
+            extensions: extensions,
             propertyId: propertyId,
             name: name,
             unit: unit,
@@ -165,6 +184,7 @@ class IntegerPropertyRetained extends IntegerProperty
     with RetainedMixin<int, IntegerProperty> {
   IntegerPropertyRetained(
       {@required String propertyId,
+      Iterable<PropertyExtension> extensions,
       String name,
       Unit unit,
       int minValue,
@@ -174,6 +194,7 @@ class IntegerPropertyRetained extends IntegerProperty
       : assert(initialValue != null),
         assert(IntegerProperty._validInt(initialValue)),
         super(
+            extensions: extensions,
             propertyId: propertyId,
             name: name,
             unit: unit,
@@ -201,12 +222,14 @@ class FloatProperty extends Property<double, FloatProperty> {
   ///If unit is [null], [Unit.none] will be used.
   FloatProperty(
       {@required String propertyId,
+      Iterable<PropertyExtension> extensions,
       String name,
       Unit unit,
       double minValue,
       double maxValue,
       bool settable})
       : super(
+            extensions: extensions,
             propertyId: propertyId,
             name: name,
             unit: unit,
@@ -254,6 +277,7 @@ class FloatPropertyRetained extends FloatProperty
     with RetainedMixin<double, FloatProperty> {
   FloatPropertyRetained(
       {@required String propertyId,
+      Iterable<PropertyExtension> extensions,
       String name,
       Unit unit,
       double minValue,
@@ -263,6 +287,7 @@ class FloatPropertyRetained extends FloatProperty
       : assert(initialValue != null),
         assert(FloatProperty._validFloat(initialValue)),
         super(
+            extensions: extensions,
             propertyId: propertyId,
             name: name,
             unit: unit,
@@ -281,8 +306,13 @@ class HsvColorProperty extends Property<HsvColor, HsvColorProperty> {
   ///
   ///If this is a [settable] property, an [EventListener] may be registered for it,
   ///and the property is able to receive commands. If not given, settable defaults to [false].
-  HsvColorProperty({@required String propertyId, String name, bool settable})
+  HsvColorProperty(
+      {@required String propertyId,
+      Iterable<PropertyExtension> extensions,
+      String name,
+      bool settable})
       : super(
+            extensions: extensions,
             propertyId: propertyId,
             name: name,
             unit: null,
@@ -302,11 +332,16 @@ class HsvColorPropertyRetained extends HsvColorProperty
     with RetainedMixin<HsvColor, HsvColorProperty> {
   HsvColorPropertyRetained(
       {@required String propertyId,
+      Iterable<PropertyExtension> extensions,
       String name,
       bool settable,
       @required HsvColor initialValue})
       : assert(initialValue != null),
-        super(propertyId: propertyId, name: name, settable: settable) {
+        super(
+            extensions: extensions,
+            propertyId: propertyId,
+            name: name,
+            settable: settable) {
     withInitialValue(initialValue);
   }
 }
@@ -319,8 +354,13 @@ class RgbColorProperty extends Property<RgbColor, RgbColorProperty> {
   ///
   ///If this is a [settable] property, an [EventListener] may be registered for it,
   ///and the property is able to receive commands. If not given, settable defaults to [false].
-  RgbColorProperty({@required String propertyId, String name, bool settable})
+  RgbColorProperty(
+      {@required String propertyId,
+      Iterable<PropertyExtension> extensions,
+      String name,
+      bool settable})
       : super(
+            extensions: extensions,
             propertyId: propertyId,
             name: name,
             unit: null,
@@ -339,11 +379,16 @@ class RgbColorPropertyRetained extends RgbColorProperty
     with RetainedMixin<RgbColor, RgbColorProperty> {
   RgbColorPropertyRetained(
       {@required String propertyId,
+      Iterable<PropertyExtension> extensions,
       String name,
       bool settable,
       @required RgbColor initialValue})
       : assert(initialValue != null),
-        super(propertyId: propertyId, name: name, settable: settable) {
+        super(
+            extensions: extensions,
+            propertyId: propertyId,
+            name: name,
+            settable: settable) {
     withInitialValue(initialValue);
   }
 }
@@ -366,12 +411,14 @@ class EnumProperty extends Property<String, EnumProperty> {
   ///If unit is [null], [Unit.none] will be used.
   EnumProperty(
       {@required String propertyId,
+      Iterable<PropertyExtension> extensions,
       String name,
       Unit unit,
       @required List<String> values,
       bool settable})
       : assert(enumValuesValid(values)),
         super(
+            extensions: extensions,
             propertyId: propertyId,
             name: name,
             unit: unit,
@@ -406,6 +453,7 @@ class EnumPropertyRetained extends EnumProperty
     with RetainedMixin<String, EnumProperty> {
   EnumPropertyRetained(
       {@required String propertyId,
+      Iterable<PropertyExtension> extensions,
       String name,
       @required List<String> values,
       bool settable,
@@ -413,6 +461,7 @@ class EnumPropertyRetained extends EnumProperty
       : assert(initialValue != null),
         assert(values.contains(initialValue)),
         super(
+            extensions: extensions,
             propertyId: propertyId,
             name: name,
             values: values,

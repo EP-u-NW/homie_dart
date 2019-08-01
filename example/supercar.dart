@@ -1,3 +1,4 @@
+import 'package:homie_dart/homie_legacy_extensions.dart';
 import 'package:meta/meta.dart';
 import 'package:homie_dart/homie_dart.dart';
 
@@ -17,11 +18,20 @@ class SuperCar extends Device {
 
   HsvColor get color => _color.value;
 
-  SuperCar({@required String deviceId})
+  SuperCar({@required String deviceId, bool useLegacyExtensions = false})
       : super(
             name: 'Super Car',
             implementation: 'superCarDart',
-            statsIntervall: 60,
+            extensions: useLegacyExtensions
+                ? <DeviceExtension>[
+                    new LegacyFirmware(
+                        firmwareName: 'homie-dart',
+                        firmwareVersion: '1.0.0',
+                        localIp: '192.168.178.147',
+                        mac: '04:D3:B0:98:32:2B'),
+                    new LegacyStats(statsIntervall: 15)
+                  ]
+                : null,
             deviceId: deviceId,
             nodes: <Node>[
               new Node(

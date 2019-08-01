@@ -29,6 +29,7 @@ class MappedEnumProperty<K> extends Property<K, MappedEnumProperty<K>> {
   ///If unit is [null], [Unit.none] will be used.
   MappedEnumProperty(
       {@required String propertyId,
+      Iterable<PropertyExtension> extensions,
       String name,
       bool settable,
       Unit unit,
@@ -36,6 +37,7 @@ class MappedEnumProperty<K> extends Property<K, MappedEnumProperty<K>> {
       : assert(values != null),
         this._names = values,
         super(
+            extensions: extensions,
             propertyId: propertyId,
             name: name,
             unit: unit,
@@ -72,6 +74,7 @@ class MappedEnumPropertyRetained<K> extends MappedEnumProperty<K>
     with RetainedMixin<K, MappedEnumProperty<K>> {
   MappedEnumPropertyRetained(
       {@required String propertyId,
+      Iterable<PropertyExtension> extensions,
       String name,
       bool settable,
       Unit unit,
@@ -81,6 +84,7 @@ class MappedEnumPropertyRetained<K> extends MappedEnumProperty<K>
         assert(values != null),
         assert(values.values.contains(initialValue)),
         super(
+            extensions: extensions,
             unit: unit,
             propertyId: propertyId,
             name: name,

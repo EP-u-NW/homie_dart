@@ -10,12 +10,20 @@ import 'unit.dart';
 import 'homie_datatype.dart';
 
 ///Baseclass for [Device], [Node] and [Property]
-abstract class HomieTopic {
+abstract class HomieTopic<E extends Extension> {
+  String get fullId;
+  List<E> get extensions;
   Future<Null> _publish(String topic, String content,
       [bool retained = true, int qos]);
+
+  V getExtension<V extends E>() {
+    return extensions.firstWhere((E e) => e.runtimeType == V);
+  }
 }
 
 abstract class Extension {
+  const Extension();
+
   Future<Null> publish(HomieTopic base, String topic, String content,
       [bool retained = true, int qos]) {
     return base._publish(topic, content, retained, qos);
@@ -23,31 +31,35 @@ abstract class Extension {
 }
 
 abstract class DeviceExtension extends Extension {
-    final String version;
-    final String extensionId;
-    final List<String> homieVersions;
-    String get extensionsEntry =>
-        '$extensionId:$version:[${homieVersions.join(';')}]';
+  String get version;
+  String get extensionId;
+  List<String> get homieVersions;
+  String get extensionsEntry =>
+      '$extensionId:$version:[${homieVersions.join(';')}]';
 
-  void onStateChange(Device device, DeviceState state);
+  const DeviceExtension();
+
+  Future<Null> onStateChange(Device device, DeviceState state);
 }
 
 abstract class NodeExtension extends Extension {
-  void onPublishNode(Node n);
-  void onUnpublishNode(Node n);
+  const NodeExtension();
+  Type get deviceExtension;
+  Future<Null> onPublishNode(Node n);
+  Future<Null> onUnpublishNode(Node n);
 }
 
 abstract class PropertyExtension extends Extension {
-  void onPublishProperty(Property p);
-  void onUnpublishProperty(Property p);
+  const PropertyExtension();
+  Type get deviceExtension;
+  Future<Null> onPublishProperty(Property p);
+  Future<Null> onUnpublishProperty(Property p);
 }
 
 ///Subclass this class to create a new homie device.
-abstract class Device extends HomieTopic {
+abstract class Device extends HomieTopic<DeviceExtension> {
   BrokerConnection _broker;
-  Timer _statSender;
   DeviceState _deviceState;
-  final DeviceStats _deviceStats;
 
   ///The full qualified topic Id of this device including the [root].
   String get fullId => '${root ?? ''}$deviceId';
@@ -64,33 +76,16 @@ abstract class Device extends HomieTopic {
   ///The version of the homie convention this device impelements. Defaults to 3.0.1.
   final String conventionVersion;
 
-  ///The ip of this device. For more information see the [Device] constructor documentation.
-  final String localIp;
-
-  ///The mac of this device. For more information see the [Device] constructor documentation.
-  final String mac;
-
-  ///The firmware name of this device. For more information see the [Device] constructor documentation.
-  final String firmwareName;
-
-  ///The firmware version of this device. For more information see the [Device] constructor documentation.
-  final String firmwareVersion;
-
   ///The implementation name of this device. For more information see the [Device] constructor documentation.
   final String implementation;
-
-  ///The intervall in seconds the [deviceStats] are published, as long as the [deviceState] is [DeviceState.ready].
-  final int statsIntervall;
 
   ///This List contains all [Node]s that are part of this device. It is not allowed to modify this list!
   final List<Node> nodes;
 
+  final List<DeviceExtension> extensions;
+
   ///Returns the state of this device.
   DeviceState get deviceState => _deviceState;
-
-  ///The stats of this device are periodically published to the mqtt broker.
-  ///The stats can be accessed and modified.
-  DeviceStats get deviceStats => _deviceStats;
 
   ///Creates a new device.
   ///The topic structure will follow the homie convention.
@@ -133,38 +128,23 @@ abstract class Device extends HomieTopic {
       @required deviceId,
       @required String name,
       String conventionVersion,
-      String localIp,
-      String mac,
-      String firmwareName,
-      String firmwareVersion,
       @required String implementation,
-      @required int statsIntervall,
-      DeviceStats stats,
-      @required Iterable<Node> nodes})
+      @required Iterable<Node> nodes,
+      Iterable<DeviceExtension> extensions})
       : assert(isValidId(deviceId)),
         assert(validString(name)),
         assert(validString(implementation)),
-        assert(statsIntervall != null),
-        assert(statsIntervall > 0),
         assert(nodes != null),
-        assert((mac ?? defaultMac) != null),
-        assert((localIp ?? defaultIp) != null),
         this.root = root ?? defaultRoot,
+        this.implementation = implementation,
         this.deviceId = deviceId,
         this.name = name,
         this.conventionVersion = conventionVersion ?? defaultConventionVersion,
-        this.localIp = localIp ?? defaultIp,
-        this.mac = mac ?? defaultMac,
-        this.firmwareName = firmwareName ?? defaultFirmwareName,
-        this.firmwareVersion = firmwareVersion ?? defaultFirmwareVersion,
-        this.implementation = implementation,
-        this.statsIntervall = statsIntervall,
-        this._deviceStats = stats ?? new DeviceStats.sinceNow(),
-        this.nodes = new List<Node>.unmodifiable(nodes) {
-    for (Node n in nodes) {
-      assert(n._device == null, 'This node is already part of another device!');
-      n._device = this;
-    }
+        this.nodes = new List<Node>.unmodifiable(nodes),
+        this.extensions = new List<DeviceExtension>.unmodifiable(
+            extensions ?? <DeviceExtension>[]) {
+    nodes.forEach((Node n) => n._setDevice(this));
+    nodes.forEach((Node n) => n._assertExtensions());
   }
 
   ///returns the [Node] with this nodeId, or [null] if no node with this nodeId is part of this device.
@@ -185,7 +165,12 @@ abstract class Device extends HomieTopic {
     await _broker.connect('$fullId/\$state', payload('lost'), true, qos);
     _deviceState = DeviceState.init;
     await _publish('$fullId/\$state', 'init');
-
+    await _publish(
+        '$fullId/\$extensions',
+        extensions
+            .map<String>(
+                (DeviceExtension extension) => extension.extensionsEntry)
+            .join(','));
     await _publish('$fullId/\$homie', conventionVersion);
     await _publish('$fullId/\$name', name);
     await _publish('$fullId/\$implementation', implementation);
@@ -194,73 +179,20 @@ abstract class Device extends HomieTopic {
     for (Node n in nodes) {
       await n._sendNode();
     }
-
-    //TODO Remove firmware stuff
-    await _publish('$fullId/\$localip', localIp);
-    await _publish('$fullId/\$mac', mac);
-    await _publish('$fullId/\$fw/name', firmwareName);
-    await _publish('$fullId/\$fw/version', firmwareVersion);
-
-    //TODO Remove stats stuff
-    await _publish('$fullId/\$stats/intervall', toString());
-
+    for (DeviceExtension e in extensions) {
+      await e.onStateChange(this, DeviceState.init);
+    }
     await ready();
   }
 
   Future<Null> _forgetDevice() async {
+    await _publish('$fullId/\$extensions', emptyPayload);
     await _publish('$fullId/\$homie', emptyPayload);
     await _publish('$fullId/\$name', emptyPayload);
-    await _publish('$fullId/\$localip', emptyPayload);
-    await _publish('$fullId/\$mac', emptyPayload);
-    await _publish('$fullId/\$fw/name', emptyPayload);
-    await _publish('$fullId/\$fw/version', emptyPayload);
     await _publish('$fullId/\$implementation', emptyPayload);
-    await _publish('$fullId/\$stats/intervall', emptyPayload);
     await _publish('$fullId/\$nodes', emptyPayload);
     for (Node n in nodes) {
       await n._forgetNode();
-    }
-    //TODO Remove stats stuff
-    await _forgetStats();
-  }
-
-  //TODO Remove stats stuff
-  Future<Null> _forgetStats() async {
-    String statsTopic = '$fullId/\$stats';
-    await _publish('$statsTopic/uptime', emptyPayload);
-    await _publish('$statsTopic/signal', emptyPayload);
-    await _publish('$statsTopic/cputemp', emptyPayload);
-    await _publish('$statsTopic/cpuload', emptyPayload);
-    await _publish('$statsTopic/battery', emptyPayload);
-    await _publish('$statsTopic/freeheap', emptyPayload);
-    await _publish('$statsTopic/supply', emptyPayload);
-  }
-
-  //TODO Remove stats stuff
-  Future<Null> _sendStats() async {
-    await _publish('$fullId/\$stats/uptime', deviceStats.uptime.toString());
-    if (deviceStats.signalStrength != null) {
-      await _publish(
-          '$fullId/\$stats/signal', deviceStats.signalStrength.toString());
-    }
-    if (deviceStats.cpuTemperature != null) {
-      await _publish(
-          '$fullId/\$stats/cputemp', deviceStats.cpuTemperature.toString());
-    }
-    if (deviceStats.cpuLoad != null) {
-      await _publish('$fullId/\$stats/cpuload', deviceStats.cpuLoad.toString());
-    }
-    if (deviceStats.batterLevel != null) {
-      await _publish(
-          '$fullId/\$stats/battery', deviceStats.batterLevel.toString());
-    }
-    if (deviceStats.freeHeap != null) {
-      await _publish(
-          '$fullId/\$stats/freeheap', deviceStats.freeHeap.toString());
-    }
-    if (deviceStats.powerSupply != null) {
-      await _publish(
-          '$fullId/\$stats/supply', deviceStats.powerSupply.toString());
     }
   }
 
@@ -273,24 +205,16 @@ abstract class Device extends HomieTopic {
             deviceState == DeviceState.init ||
             deviceState == DeviceState.sleeping,
         'Can only go into the ready state from the alert, init or sleeping state.');
-    await _sendStats();
     await _publish('$fullId/\$state', 'ready');
+    for (DeviceExtension e in extensions) {
+      await e.onStateChange(this, DeviceState.ready);
+    }
     _deviceState = DeviceState.ready;
-
-//TODO Remove stats stuff
-    _statSender =
-        new Timer.periodic(new Duration(seconds: statsIntervall), (Timer t) {
-      if (t.isActive) {
-        try {
-          _sendStats();
-        } on DisconnectingError {}
-      }
-    });
   }
 
   ///Puts the device into sleep state. While sleeping, sending status is paused.
   Future<Null> sleep() async {
-     assert(
+    assert(
         (const <DeviceState>[
           DeviceState.alert,
           DeviceState.ready,
@@ -298,8 +222,10 @@ abstract class Device extends HomieTopic {
         ])
             .contains(deviceState),
         'Can only go into the sleeping state from the alert, ready or sleeping state.');
-    _statSender.cancel();
     await _publish('$fullId/\$state', 'sleeping');
+    for (DeviceExtension e in extensions) {
+      await e.onStateChange(this, DeviceState.sleeping);
+    }
     _deviceState = DeviceState.sleeping;
   }
 
@@ -314,8 +240,10 @@ abstract class Device extends HomieTopic {
         ])
             .contains(deviceState),
         'Can only go into the alert state from the alert, ready or sleeping state.');
-    _statSender.cancel();
     await _publish('$fullId/\$state', 'alert');
+    for (DeviceExtension e in extensions) {
+      await e.onStateChange(this, DeviceState.alert);
+    }
     _deviceState = DeviceState.alert;
   }
 
@@ -323,7 +251,7 @@ abstract class Device extends HomieTopic {
   ///You can never use this object instance again!
   ///See the remarks in [init].
   Future<Null> disconnect() async {
-        assert(
+    assert(
         (const <DeviceState>[
           DeviceState.alert,
           DeviceState.ready,
@@ -331,9 +259,11 @@ abstract class Device extends HomieTopic {
         ])
             .contains(deviceState),
         'Can only go into the disconnected state from the alert, ready or sleeping state.');
-    _statSender.cancel();
     await _publish('$fullId/\$state', 'disconnected');
     await _forgetDevice();
+    for (DeviceExtension e in extensions) {
+      await e.onStateChange(this, DeviceState.disconnected);
+    }
     await _broker.disconnect();
     _deviceState = DeviceState.disconnected;
   }
@@ -353,96 +283,38 @@ abstract class Device extends HomieTopic {
   }
 }
 
-///Used to represend the stats of a device.
-class DeviceStats {
-  final DateTime _bootTime;
-
-  ///Signal strength in %. Wired devices might have a strengh of 100. This property is optional and might be null.
-  int signalStrength;
-
-  ///The cpu temperature in °C. This property is optional and might be null.
-  int cpuTemperature;
-
-  ///The cpu load in %. This property is optional and might be null.
-  int cpuLoad;
-
-  ///The battery level in %. This property is optional and might be null.
-  int batterLevel;
-
-  ///Free heap in bytes. This property is optional and might be null.
-  int freeHeap;
-
-  ///The power supply voltage in Volt. This property is optional and might be null.
-  double powerSupply;
-
-  ///The uptime is the time that passed since the [bootTime] given in the constructor in seconds.
-  int get uptime => new DateTime.now().difference(_bootTime).inSeconds;
-
-  ///Creates a new [DeviceStats] object with [new DateTime.now()] as [bootTime].
-  ///See [new DeviceStats()] for an explanation of the other properties.
-  DeviceStats.sinceNow(
-      {int signalStrength,
-      int cpuTemperature,
-      int cpuLoad,
-      int batteryLevel,
-      int freeHeap,
-      double powerSupply})
-      : this(
-            bootTime: new DateTime.now(),
-            signalStrength: signalStrength,
-            cpuTemperature: cpuTemperature,
-            cpuLoad: cpuLoad,
-            batteryLevel: batteryLevel,
-            freeHeap: freeHeap,
-            powerSupply: powerSupply);
-
-  ///Creates a new state object.
-  ///
-  ///The only required property is the [bootTime], it must not be null.
-  ///Using the [bootTime] the [uptime] of the device is calculated.
-  ///All not requried properties are optional and might be [null]. In this case, they are not published.
-  ///
-  ///[singalStrengh]: Signal strength in %. Wired devices might have a strengh of 100.
-  ///
-  ///[cpuTemperature]: The cpu temperature in °C. This property is optional and might be null.
-  ///
-  ///[cpuLoad]: The cpu load in %. This property is optional and might be null.
-  ///
-  ///[batteryLevel]: The battery level in %. This property is optional and might be null.
-  ///
-  ///[freeHeap]: Free heap in bytes. This property is optional and might be null.
-  ///
-  ///[powerSupply]: The power supply voltage in Volt. This property is optional and might be null.
-  DeviceStats(
-      {@required DateTime bootTime,
-      int signalStrength,
-      int cpuTemperature,
-      int cpuLoad,
-      int batteryLevel,
-      int freeHeap,
-      double powerSupply})
-      : assert(bootTime != null),
-        this._bootTime = bootTime,
-        this.signalStrength = signalStrength,
-        this.cpuTemperature = cpuTemperature,
-        this.cpuLoad = cpuLoad,
-        this.batterLevel = batteryLevel,
-        this.freeHeap = freeHeap,
-        this.powerSupply = powerSupply;
-}
-
 ///A enum for all device states defined by the homie convention.
 enum DeviceState { init, ready, disconnected, sleeping, lost, alert }
 
 ///This class represents a homie node. Nodes are added to devices.
 ///Each node object must only be part of one device!
-class Node extends HomieTopic {
-  //The device this node belongs to.
+class Node extends HomieTopic<NodeExtension> {
   Device _device;
+
+  void _setDevice(Device d) {
+    assert(_device == null, 'This node is already part of another device!');
+    _device = d;
+  }
+
+  void _assertExtensions() {
+    Iterable<Type> supportedTypes =
+        _device.extensions.map<Type>((DeviceExtension e) => runtimeType);
+    for (NodeExtension e in extensions) {
+      assert(e.deviceExtension != null,
+          'The deviceExtension property of a NodeExtension must not be null! See the documentation!');
+      assert(supportedTypes.contains(e.deviceExtension),
+          'The extension $e must only be added to devices which provide an extension of type ${e.deviceExtension}');
+    }
+    properties.forEach((Property p) => p._assertExtensions());
+  }
+
+  ///The device this node belongs to.
   Device get device => _device;
 
   ///The unique Id of this node, which must be an valid homie Id. See [isValidId].
   final String nodeId;
+
+  final List<NodeExtension> extensions;
 
   ///The full qualified topic Id of this node. It is only valid to call this on a node which is part of a device!
   String get fullId {
@@ -462,7 +334,8 @@ class Node extends HomieTopic {
       {@required String nodeId,
       @required String name,
       @required String type,
-      @required Iterable<Property> properties})
+      @required Iterable<Property> properties,
+      Iterable<NodeExtension> extensions})
       : assert(validString(nodeId)),
         assert(validString(name)),
         assert(validString(type)),
@@ -470,11 +343,10 @@ class Node extends HomieTopic {
         this.nodeId = nodeId,
         this.name = name,
         this.type = type,
-        this.properties = new List<Property>.unmodifiable(properties) {
-    for (Property p in properties) {
-      assert(p._node == null, 'This property is already part of another node');
-      p._node = this;
-    }
+        this.properties = new List<Property>.unmodifiable(properties),
+        this.extensions = new List<NodeExtension>.unmodifiable(
+            extensions ?? <NodeExtension>[]) {
+    properties.forEach((Property p) => p._setNode(this));
   }
 
   ///returns the [Property] with this propertyId, or [null] if no property with this propertyId is part of this node.
@@ -486,6 +358,9 @@ class Node extends HomieTopic {
     await _publish('$fullId/\$name', emptyPayload);
     await _publish('$fullId/\$type', emptyPayload);
     await _publish('$fullId/\$properties', emptyPayload);
+    for (NodeExtension e in extensions) {
+      await e.onUnpublishNode(this);
+    }
     for (Property p in properties) {
       await p._forgetProperty();
     }
@@ -496,6 +371,9 @@ class Node extends HomieTopic {
     await _publish('$fullId/\$type', type);
     String propertyIds = properties.map((Property p) => p.propertyId).join(',');
     await _publish('$fullId/\$properties', propertyIds);
+    for (NodeExtension e in extensions) {
+      await e.onPublishNode(this);
+    }
     for (Property p in properties) {
       await p._sendProperty();
     }
@@ -537,10 +415,26 @@ mixin RetainedMixin<T, V extends Property<T, V>> on Property<T, V> {
 ///The typeargument [T] denotes the representation of the value of the property.
 ///For most datatypes, homie uses Strings, so the property class is responsible to translate its value to a String and vice versa.
 ///The typeargument [V] is needed so that an [EventListener] knows, of what type the property is.
-abstract class Property<T, V extends Property<T, V>> extends HomieTopic {
+abstract class Property<T, V extends Property<T, V>> extends HomieTopic<PropertyExtension> {
   EventListener<T, V> _listener;
 
   Node _node;
+
+  void _setNode(Node n) {
+    assert(_node == null, 'This property is already part of another node');
+    _node = n;
+  }
+
+  void _assertExtensions() {
+    Iterable<Type> supportedTypes =
+        _node._device.extensions.map<Type>((DeviceExtension e) => runtimeType);
+    for (PropertyExtension e in extensions) {
+      assert(e.deviceExtension != null,
+          'The deviceExtension property of a PropertyExtension must not be null! See the documentation!');
+      assert(supportedTypes.contains(e.deviceExtension),
+          'The extension $e must only be added to devices which provide an extension of type ${e.deviceExtension}');
+    }
+  }
 
   ///The node this property belongs to.
   Node get node => _node;
@@ -571,6 +465,8 @@ abstract class Property<T, V extends Property<T, V>> extends HomieTopic {
 
   ///If this property is retained. See [RetainedMixin].
   bool get retained => this is RetainedMixin<T, V>;
+
+  final List<PropertyExtension> extensions;
 
   EventListener<T, V> get listener => _listener;
 
@@ -626,8 +522,11 @@ abstract class Property<T, V extends Property<T, V>> extends HomieTopic {
       Unit unit,
       @required HomieDatatype dataType,
       bool settable,
-      String format})
-      : assert(isValidId(propertyId)),
+      String format,
+      Iterable<PropertyExtension> extensions})
+      : this.extensions = new List<PropertyExtension>.unmodifiable(
+            extensions ?? <PropertyExtension>[]),
+        assert(isValidId(propertyId)),
         assert(dataType != null),
         this.name = name ?? '',
         this.settable = settable ?? false,
@@ -636,7 +535,6 @@ abstract class Property<T, V extends Property<T, V>> extends HomieTopic {
         this.dataType = dataType,
         this.format = format;
 
-  //FIXME Add property related code
   Future<Null> _forgetProperty() async {
     await _publish('$fullId/\$name', emptyPayload);
     await _publish('$fullId/\$settable', emptyPayload);
@@ -648,6 +546,9 @@ abstract class Property<T, V extends Property<T, V>> extends HomieTopic {
     }
     if (retained) {
       await _publish(fullId, emptyPayload);
+    }
+    for (PropertyExtension e in extensions) {
+      await e.onUnpublishProperty(this);
     }
   }
 
@@ -673,6 +574,9 @@ abstract class Property<T, V extends Property<T, V>> extends HomieTopic {
           valueToStringRepresentation((this as RetainedMixin)._value);
       await _publish(fullId, value);
     }
+    for (PropertyExtension e in extensions) {
+      await e.onPublishProperty(this);
+    }
   }
 
   Future<Null> _publish(String topic, String content,
@@ -680,5 +584,5 @@ abstract class Property<T, V extends Property<T, V>> extends HomieTopic {
     assert(node != null,
         'This property can not publish values as it is not part of a node');
     return _node._publish(topic, content, retained, qos);
-  }
+  } 
 }
