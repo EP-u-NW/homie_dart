@@ -17,6 +17,9 @@ class StringProperty extends Property<String, StringProperty> {
   ///and the property is able to receive commands. If not given, settable defaults to [false].
   ///
   ///If unit is [null], [Unit.none] will be used.
+  ///
+  ///The [extensions] can extend this property, see the [PropertyExtension] class.
+  ///It is not allowed to modify the [extensions] after this point!
   StringProperty(
       {@required String propertyId,
       Iterable<PropertyExtension> extensions,
@@ -69,6 +72,9 @@ class BooleanProperty extends Property<bool, BooleanProperty> {
   ///
   ///If this is a [settable] property, an [EventListener] may be registered for it,
   ///and the property is able to receive commands. If not given, settable defaults to [false].
+  ///
+  ///The [extensions] can extend this property, see the [PropertyExtension] class.
+  ///It is not allowed to modify the [extensions] after this point!
   BooleanProperty(
       {@required String propertyId,
       Iterable<PropertyExtension> extensions,
@@ -127,6 +133,9 @@ class IntegerProperty extends Property<int, IntegerProperty> {
   ///If [maxValue] is not [null] but [minValue] is, [homieIntMin] is used instead.
   ///
   ///If unit is [null], [Unit.none] will be used.
+  ///
+  ///The [extensions] can extend this property, see the [PropertyExtension] class.
+  ///It is not allowed to modify the [extensions] after this point!
   IntegerProperty(
       {@required String propertyId,
       Iterable<PropertyExtension> extensions,
@@ -220,6 +229,9 @@ class FloatProperty extends Property<double, FloatProperty> {
   ///If [maxValue] is not [null] but [minValue] is, [homieFloatMin] is used instead.
   ///
   ///If unit is [null], [Unit.none] will be used.
+  ///
+  ///The [extensions] can extend this property, see the [PropertyExtension] class.
+  ///It is not allowed to modify the [extensions] after this point!
   FloatProperty(
       {@required String propertyId,
       Iterable<PropertyExtension> extensions,
@@ -306,6 +318,9 @@ class HsvColorProperty extends Property<HsvColor, HsvColorProperty> {
   ///
   ///If this is a [settable] property, an [EventListener] may be registered for it,
   ///and the property is able to receive commands. If not given, settable defaults to [false].
+  ///
+  ///The [extensions] can extend this property, see the [PropertyExtension] class.
+  ///It is not allowed to modify the [extensions] after this point!
   HsvColorProperty(
       {@required String propertyId,
       Iterable<PropertyExtension> extensions,
@@ -354,6 +369,9 @@ class RgbColorProperty extends Property<RgbColor, RgbColorProperty> {
   ///
   ///If this is a [settable] property, an [EventListener] may be registered for it,
   ///and the property is able to receive commands. If not given, settable defaults to [false].
+  ///
+  ///The [extensions] can extend this property, see the [PropertyExtension] class.
+  ///It is not allowed to modify the [extensions] after this point!
   RgbColorProperty(
       {@required String propertyId,
       Iterable<PropertyExtension> extensions,
@@ -409,6 +427,9 @@ class EnumProperty extends Property<String, EnumProperty> {
   ///and are the only valid values this property can represent.
   ///
   ///If unit is [null], [Unit.none] will be used.
+  ///
+  ///The [extensions] can extend this property, see the [PropertyExtension] class.
+  ///It is not allowed to modify the [extensions] after this point!
   EnumProperty(
       {@required String propertyId,
       Iterable<PropertyExtension> extensions,

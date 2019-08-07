@@ -27,6 +27,9 @@ class MappedEnumProperty<K> extends Property<K, MappedEnumProperty<K>> {
   ///are not valid values for this property!
   ///
   ///If unit is [null], [Unit.none] will be used.
+  ///
+  ///The [extensions] can extend this property, see the [PropertyExtension] class.
+  ///It is not allowed to modify the [extensions] after this point!
   MappedEnumProperty(
       {@required String propertyId,
       Iterable<PropertyExtension> extensions,
