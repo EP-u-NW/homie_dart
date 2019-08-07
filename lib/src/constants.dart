@@ -18,5 +18,6 @@ const double homieFloatMin = -homieFloatMax;
 const double homieFloatMax = 3.4028234663852885981170418348451692544e+38;
 
 ///An empty string which will translate to an empty payload for sending through the mqtt broker.
+///Retained topics that receive an empty payload are removed by the broker.
 const String emptyPayload='';
 

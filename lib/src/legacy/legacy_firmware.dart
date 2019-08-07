@@ -5,16 +5,16 @@ class LegacyFirmware extends DeviceExtension {
   String get extensionId => 'org.homie.legacy-firmware';
   List<String> get homieVersions => const <String>['4.x'];
 
-  ///The ip of this device. For more information see the [Device] constructor documentation.
+  ///The ip of this device.
   final String localIp;
 
-  ///The mac of this device. For more information see the [Device] constructor documentation.
+  ///The mac of this device.
   final String mac;
 
-  ///The firmware name of this device. For more information see the [Device] constructor documentation.
+  ///The firmware name of this device.
   final String firmwareName;
 
-  ///The firmware version of this device. For more information see the [Device] constructor documentation.
+  ///The firmware version of this device.
   final String firmwareVersion;
 
   const LegacyFirmware(
@@ -29,7 +29,7 @@ class LegacyFirmware extends DeviceExtension {
         this.firmwareVersion = firmwareVersion;
 
   Future<Null> onStateChange(Device device, DeviceState state) async {
-    String fullId = device.fullId;
+    String fullId = device.fullTopic;
     if (state == DeviceState.init) {
       await publish(device, '$fullId/\$localip', localIp);
       await publish(device, '$fullId/\$mac', mac);

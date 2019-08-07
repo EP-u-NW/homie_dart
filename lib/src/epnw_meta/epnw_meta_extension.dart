@@ -35,7 +35,7 @@ class MetaExtension extends DeviceExtension
   Future<Null> onUnpublishProperty(Property p) => _forget(p);
 
   Future<Null> _send(HomieTopic t) async {
-    String topic = '${t.fullId}/\$meta';
+    String topic = '${t.fullTopic}/\$meta';
     if (tags != null && tags.isNotEmpty) {
       await publish(t, '$topic/tags', tags.join(','));
     }
@@ -75,7 +75,7 @@ class MetaExtension extends DeviceExtension
   }
 
   Future<Null> _forget(HomieTopic t) async {
-    String topic = '${t.fullId}/\$meta';
+    String topic = '${t.fullTopic}/\$meta';
     await publish(t, '$topic/tags', emptyPayload);
     await _forgetKeys(t, mainkeys, topic, true);
   }

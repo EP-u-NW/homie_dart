@@ -16,9 +16,16 @@ class LegacyStats extends DeviceExtension {
   ///The stats can be accessed and modified.
   DeviceStats get deviceStats => _deviceStats;
 
-  ///The intervall in seconds the [deviceStats] are published, as long as the [deviceState] is [DeviceState.ready].
+  ///The intervall in seconds the [deviceStats] are published, as long as the [Device.deviceState] is [DeviceState.ready].
   final int statsIntervall;
 
+  ///Stats about a device are peroidically published. With this extension, this happens automatically.
+  ///As long as the [Device.deviceState] of the [Device] this extension is added to
+  ///is [DeviceState.ready] the stats will be published every [statsIntervall] seconds.
+  ///This value must not be [null] and greater than 0.
+  ///The [stats] give information about the device. You can preconfigure the [stats] with custom initial values and pass them here.
+  ///If the [stats] are [null], a new [DeviceStats] object will be created.
+  ///In this case, the uptime of [Device] objects using this extension object will be counted since creation of this extension object.
   LegacyStats({@required int statsIntervall, DeviceStats stats})
       : assert(statsIntervall != null),
         assert(statsIntervall > 0),
@@ -29,7 +36,7 @@ class LegacyStats extends DeviceExtension {
   Future<Null> onStateChange(Device device, DeviceState state) async {
     if (state == DeviceState.init) {
       await publish(
-          device, '${device.fullId}/\$stats/intervall', statsIntervall.toString());
+          device, '${device.fullTopic}/\$stats/intervall', statsIntervall.toString());
       await _sendStats(device);
     } else if (state == DeviceState.ready) {
       _statsSender[device] =
@@ -46,13 +53,13 @@ class LegacyStats extends DeviceExtension {
     } else if (state == DeviceState.disconnected) {
       _statsSender[device].cancel();
       _statsSender[device]==null;
-      await publish(device, '${device.fullId}/\$stats/intervall', emptyPayload);
+      await publish(device, '${device.fullTopic}/\$stats/intervall', emptyPayload);
       await _forgetStats(device);
     }
   }
 
   Future<Null> _forgetStats(Device device) async {
-    String statsTopic = '${device.fullId}/\$stats';
+    String statsTopic = '${device.fullTopic}/\$stats';
     await publish(device,'$statsTopic/uptime', emptyPayload);
     await publish(device,'$statsTopic/signal', emptyPayload);
     await publish(device,'$statsTopic/cputemp', emptyPayload);
@@ -63,7 +70,7 @@ class LegacyStats extends DeviceExtension {
   }
 
   Future<Null> _sendStats(Device device) async {
-     String statsTopic = '${device.fullId}/\$stats';
+     String statsTopic = '${device.fullTopic}/\$stats';
     await publish(device,'$statsTopic/uptime', deviceStats.uptime.toString());
     if (deviceStats.signalStrength != null) {
       await publish(device,
