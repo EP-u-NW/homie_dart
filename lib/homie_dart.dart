@@ -1,6 +1,12 @@
-///An implementation of the homie convention version 3.0.1 in dart.
-///This library does not support homie property arrays or broadcast channel. 
+///An implementation of the homie convention version 4.0 in dart.
+///This library does not support the homie broadcast channel. 
 ///To implement a device extend the [Device] class and add some [Node] with [Property].
+///
+///Extensions can be created and added do devices, nodes, or properties.
+///See the subclasses of [Extension] for more information. 
+///Version 4.0 of the convention removes some device attributes, such as stats and mac address.
+///If you want to keep these attributes you can use the LegacyStats and LegacyFirmware extensions
+/// found in the [homie_legacy_extensions] library, which is also part of this package.
 ///
 ///The version 3.0.1 of the homie convention requires an ip and a mac address to be liked to a device.
 ///These values can be set using the top-level properties [defaultIp] and [defaultMac].
@@ -12,6 +18,7 @@
 ///Either implement it yourselfe or use the package [homie_dart_on_mqtt_client]
 ///which exports functionality of this package, and provides an implementation of [BrokerConnection]. 
 library homie_dart;
+
 
 export 'src/broker_connection.dart';
 export 'src/colors.dart';

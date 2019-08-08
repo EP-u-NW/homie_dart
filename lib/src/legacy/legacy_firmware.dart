@@ -1,5 +1,6 @@
 import 'package:homie_dart/homie_dart.dart';
 
+///Adds the mac, localIp, firmwareName and firmwareVersion attributes that where removed from homie 3.0.1 to 4.0.
 class LegacyFirmware extends DeviceExtension {
   String get version => '0.1.1';
   String get extensionId => 'org.homie.legacy-firmware';

@@ -1,9 +1,9 @@
 name: homie_dart
-description: An implementation of the homie convention in dart.
+description: An implementation of the homie convention 4.0 with extension support in dart. Also features the homie legacy stats, homie legacy firmeware and epnw meta extensions.
 author: EPNW <prokopwieler.hardundsoftware@gmail.com>
 homepage: https://github.com/epnw/homie_dart
 
-version: 1.1.0
+version: 2.0.0
 
 environment:
   sdk: ">=2.1.0 <3.0.0"

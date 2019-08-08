@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:meta/meta.dart';
 import 'package:homie_dart/homie_dart.dart';
 
+///The $stats attribute got removed from homie 3.0.1 to 4.0.
+///Adding this extension enables you to send stats just as you would have in homie versions lower 4.0.
 class LegacyStats extends DeviceExtension {
   String get version => '0.1.1';
   String get extensionId => 'org.homie.legacy-stats';
