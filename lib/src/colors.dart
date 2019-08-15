@@ -11,7 +11,7 @@ class HsvColor {
     }
   }
 
-  ///Creates a new [HsvColor] based on a [RgbColor]
+  ///Creates a new [HsvColor] based on a [RgbColor].
   ///During computation there might be nummeric erros, therefor if r is a [RgbColor] the expression
   ///[r == new RgbColor.fromHsvColor(new HsvColor.fromRgbColor(r))] might not hold true.
   factory HsvColor.fromRgbColor(RgbColor c) {

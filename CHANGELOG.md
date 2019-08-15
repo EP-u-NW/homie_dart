@@ -1,3 +1,9 @@
+## [2.0.1] - 15.08.2019
+
+* Fixed links due to release of Homie 4
+* Published to pub
+* Did not change any code with respect to package version 2.0.0
+
 ## [2.0.0] - 08.08.2019
 
 * Implemented Homie convention version 4.0
