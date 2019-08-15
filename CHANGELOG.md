@@ -1,3 +1,7 @@
+## [2.0.2] - 15.08.2019
+
+* Implemented pub health suggestions
+
 ## [2.0.1] - 15.08.2019
 
 * Fixed links due to release of Homie 4

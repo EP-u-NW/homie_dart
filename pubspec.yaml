@@ -3,10 +3,11 @@ description: An implementation of the homie convention 4.0 with extension suppor
 author: EPNW <prokopwieler.hardundsoftware@gmail.com>
 homepage: https://github.com/epnw/homie_dart
 
-version: 2.0.1
+version: 2.0.2
 
 environment:
   sdk: ">=2.1.0 <3.0.0"
 
 dependencies:
   meta: ^1.1.7
+  pedantic: ^1.8.0+1

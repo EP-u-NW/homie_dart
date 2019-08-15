@@ -46,7 +46,9 @@ class LegacyStats extends DeviceExtension {
         if (t.isActive) {
           try {
            await _sendStats(device);
-          } on DisconnectingError {}
+          } on DisconnectingError {
+            //ignore
+          }
         }
       });
     } else if (state == DeviceState.alert || state == DeviceState.sleeping) {

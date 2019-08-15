@@ -1,7 +1,7 @@
 import 'package:homie_dart/homie_dart.dart';
 import 'package:meta/meta.dart';
 
-///The epnw Meta extension can be used to add tags and key-value pairs to devices, nodes and properties.
+///The EPNW Meta extension can be used to add tags and key-value pairs to devices, nodes and properties.
 ///See the extension speficiation on the homie convention extensions page for more information.
 ///This class can be used as an [DeviceExtension] as well as an [NodeExtension] and [PropertyExtension]. 
 class MetaExtension extends DeviceExtension

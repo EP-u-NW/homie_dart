@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:meta/meta.dart';
+import 'package:pedantic/pedantic.dart';
 
 import 'broker_connection.dart';
 import 'constants.dart';
@@ -524,7 +525,7 @@ abstract class Property<T, V extends Property<T, V>>
   ///Sets the [EventListener] of this property.
   ///A property may only have an [EventListener] if it is [settable].
   ///The [EventListener] is called if the settable property receives a command.
-  void set listener(EventListener<T, V> listener) {
+  set listener(EventListener<T, V> listener) {
     assert(settable, 'Property not settable!');
     _listener = listener;
   }
@@ -619,10 +620,11 @@ abstract class Property<T, V extends Property<T, V>>
     if (settable) {
       Stream<List<int>> events =
           await _node._device._broker.subscribe('$fullTopic/set', qos);
-      new Utf8Decoder()
+      Future<dynamic> listening = new Utf8Decoder()
           .bind(events)
           .map((String value) => stringRepresentationToValue(value))
           .forEach(_informListener);
+      unawaited(listening);
     }
     if (retained) {
       String value =
