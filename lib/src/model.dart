@@ -331,7 +331,7 @@ class Node extends HomieTopic<NodeExtension> {
 
   void _assertExtensions() {
     Iterable<Type> supportedTypes =
-        _device.extensions.map<Type>((DeviceExtension e) => runtimeType);
+        _device.extensions.map<Type>((DeviceExtension e) => e.runtimeType);
     for (NodeExtension e in extensions) {
       assert(e.deviceExtension != null,
           'The deviceExtension property of a NodeExtension must not be null! See the documentation!');
@@ -478,7 +478,7 @@ abstract class Property<T, V extends Property<T, V>>
 
   void _assertExtensions() {
     Iterable<Type> supportedTypes =
-        _node._device.extensions.map<Type>((DeviceExtension e) => runtimeType);
+        _node._device.extensions.map<Type>((DeviceExtension e) => e.runtimeType);
     for (PropertyExtension e in extensions) {
       assert(e.deviceExtension != null,
           'The deviceExtension property of a PropertyExtension must not be null! See the documentation!');
